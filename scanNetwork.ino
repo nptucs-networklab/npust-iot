@@ -1,125 +1,116 @@
+/*
 
+ This example  prints the Wifi shield's MAC address, and
+ scans for available Wifi networks using the Wifi shield.
+ Every ten seconds, it scans again. It doesn't actually
+ connect to any network, so no encryption scheme is specified.
 
-// 功能:
-// 1. 嘗試10次連線
-// 2. 印出 MAC address --- 格式修正
-// 3. 印出 local IP & Gateway IP
-// 4. 準備上傳至 Things Speak網站之HTTP request message (要求下載數值)
-// 5. 與Things Speak網站建立TCP 連線，並從網站下載數值回來                
-// 6. 根據數值結果決定亮燈 -- 1則亮，0則暗                          
+ Circuit:
+ * WiFi shield attached
+
+ created 13 July 2010
+ by dlf (Metodo2 srl)
+ modified 21 Junn 2012
+ by Tom Igoe and Jaymes Dec
+ */
+
 
 #include <SPI.h>
-#include <WiFiNINA.h>
-
-byte mac[6];
-int val=0;
-int val1=8;
-int last_state=8;
-String upload; 
-int i=0;
-
-int status=WL_IDLE_STATUS;
-char ssid[]="iPhone CF";
-char pass[]="cf205666";
-
-char server[]="api.thingspeak.com";
-WiFiClient client;
-
-
-void print_MAC(){
- 
-  // WiFi.macAddress(mac);
-    Serial.print("MAC:");
-    for (i=5;i>=1;i--){
-       if (mac[i]<16)  Serial.print("0");
-      Serial.print(mac[i],HEX);   
-       Serial.print(":");
-    }
-    Serial.println(mac[0],HEX);
-  
-}
-
+#include <WiFi.h>
 
 void setup() {
-  // put your setup code here, to run once:
-int i=1;  
-Serial.begin(9600);
-pinMode(LED_BUILTIN,OUTPUT);
-
-// 嘗試連線
-
-while (status!=WL_CONNECTED && i<=10) {
-  Serial.print("嘗試連線第 ");
-  Serial.print(i);
-  Serial.println("次...");
-  
-  status=WiFi.begin(ssid,pass);
-
-  if (status!=WL_CONNECTED)
-     Serial.println("     無法連線");
-  else 
-     Serial.println("     成功連線");
-
-  i++;
-  delay(5000);
-}
-
-  if (status==WL_CONNECTED){
-     WiFi.macAddress(mac);
-     print_MAC();
-     Serial.println("");
-
-     IPAddress ip=WiFi.localIP();
-     Serial.print("IP Address: ");
-     Serial.println(ip);
-     Serial.println("");
-     
-     IPAddress gateway=WiFi.gatewayIP();
-     Serial.print("Gateway Address: ");
-     Serial.println(gateway);
-     Serial.println(""); 
+  //Initialize serial and wait for port to open:
+  Serial.begin(9600);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
   }
 
-  
-      upload="GET /channels/2165358/fields/1/last.txt";
-      Serial.print("  :   ");
-      Serial.println(upload);
+  // check for the presence of the shield:
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present");
+    // don't continue:
+    while (true);
+  }
 
-      if (client.connect(server, 80)) {
-          Serial.println("connected to server ");
-          client.println(upload);
-          client.println();
-      } 
+  String fv = WiFi.firmwareVersion();
+  if (fv != "1.1.0") {
+    Serial.println("Please upgrade the firmware");
+  }
+
+  // Print WiFi MAC address:
+  printMacAddress();
 }
 
+void loop() {
+  // scan for existing networks:
+  Serial.println("Scanning available networks...");
+  listNetworks();
+  delay(10000);
+}
 
+void printMacAddress() {
+  // the MAC address of your Wifi shield
+  byte mac[6];
 
-void loop() { 
-         while (client.available()) {
-         char c = client.read();
-         Serial.print("reading incoming data :  ");
-         Serial.write(c);
-         i=(int) c-48;
-         Serial.println("");
-         Serial.println(i);
-         if (i==1) digitalWrite(LED_BUILTIN,HIGH); else digitalWrite(LED_BUILTIN,LOW);
-      }
+  // print your MAC address:
+  WiFi.macAddress(mac);
+  Serial.print("MAC: ");
+  Serial.print(mac[5], HEX);
+  Serial.print(":");
+  Serial.print(mac[4], HEX);
+  Serial.print(":");
+  Serial.print(mac[3], HEX);
+  Serial.print(":");
+  Serial.print(mac[2], HEX);
+  Serial.print(":");
+  Serial.print(mac[1], HEX);
+  Serial.print(":");
+  Serial.println(mac[0], HEX);
+}
 
-  // if the server's disconnected, stop the client:
-  if (!client.connected()) {
-    Serial.println();
-    Serial.print("connection teardown");
-   // client.stop();
-
-  if (client.connect(server, 80)) {
-          Serial.println("connected to server ");
-          client.println(upload);
-          client.println();
-      }
-
-    
+void listNetworks() {
+  // scan for nearby networks:
+  Serial.println("** Scan Networks **");
+  int numSsid = WiFi.scanNetworks();
+  if (numSsid == -1) {
+    Serial.println("Couldn't get a wifi connection");
+    while (true);
   }
- 
-  delay(5000);
 
+  // print the list of networks seen:
+  Serial.print("number of available networks:");
+  Serial.println(numSsid);
+
+  // print the network number and name for each network found:
+  for (int thisNet = 0; thisNet < numSsid; thisNet++) {
+    Serial.print(thisNet);
+    Serial.print(") ");
+    Serial.print(WiFi.SSID(thisNet));
+    Serial.print("\tSignal: ");
+    Serial.print(WiFi.RSSI(thisNet));
+    Serial.print(" dBm");
+    Serial.print("\tEncryption: ");
+    printEncryptionType(WiFi.encryptionType(thisNet));
+  }
+}
+
+void printEncryptionType(int thisType) {
+  // read the encryption type and print out the name:
+  switch (thisType) {
+    case ENC_TYPE_WEP:
+      Serial.println("WEP");
+      break;
+    case ENC_TYPE_TKIP:
+      Serial.println("WPA");
+      break;
+    case ENC_TYPE_CCMP:
+      Serial.println("WPA2");
+      break;
+    case ENC_TYPE_NONE:
+      Serial.println("None");
+      break;
+    case ENC_TYPE_AUTO:
+      Serial.println("Auto");
+      break;
+  }
 }
